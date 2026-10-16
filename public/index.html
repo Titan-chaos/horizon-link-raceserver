@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LazyForza 地产赛事总控</title>
+  <link rel="stylesheet" href="/styles.css?v=20260830-1">
+  <link rel="stylesheet" href="/teams.css?v=20260820-1">
+  <link rel="stylesheet" href="/events.css?v=20260820-1">
+  <link rel="stylesheet" href="/results.css?v=20260823-1">
+  <link rel="stylesheet" href="/workspace.css?v=20260912-3">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <img class="brand-mark" src="/lazyforza-logo.png" alt="LF">
+        <div class="brand-copy"><p class="eyebrow">LAZYFORZA RACE CONTROL</p><h1>地产赛事总控</h1></div>
+      </div>
+      <div class="topbar-actions">
+        <label class="language-switcher" data-i18n-skip>
+          <span class="sr-only">Language</span>
+          <select id="languageSelect" aria-label="Language">
+            <option value="zh-CN">简体中文</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <div id="connectionState" class="connection-state"><i></i><span>正在读取服务端状态</span></div>
+      </div>
+    </header>
+
+    <section id="setupPanel" class="auth-panel panel hidden">
+      <div id="terminalSetupNotice" class="auth-intro">
+        <span class="step-mark">等待服务器初始化</span>
+        <h2>服务器尚未完成初始化</h2>
+        <p>请在运行 RaceServer 的服务器终端完成首次设置，然后刷新此页面。</p>
+        <ul><li>Windows：<code>LazyForza.RaceServer.Web.exe init</code></li><li>Linux / macOS：<code>./LazyForza.RaceServer.Web init</code></li></ul>
+      </div>
+      <div id="terminalSetupAction" class="auth-form">
+        <p class="muted">首次设置只能由拥有服务器终端访问权限的管理员完成。此页面不会接收房间密码或超级管理员密码。</p>
+        <button id="refreshSetupStatus" type="button" class="primary wide">刷新服务器状态</button>
+      </div>
+      <div id="remoteSetupIntro" class="auth-intro hidden">
+        <span class="step-mark">首次设置</span>
+        <h2>创建你的赛事房间</h2>
+        <p>这一步只会出现一次。设置完成后，车手使用房间密码加入；这里设置的总控密码会成为首个超管账号。</p>
+        <ul><li>两个密码不要相同，也不要把总控密码发给参赛车手。</li><li>分段数需要与将要使用的地产赛道一致。</li><li>密码只保存为加盐摘要，不写入网页或赛事日志。</li></ul>
+      </div>
+      <div id="remoteSetupFormHost" class="hidden"></div>
+    </section>
+
+    <section id="loginPanel" class="auth-panel panel hidden">
+      <div class="auth-intro"><span class="step-mark">赛事总控</span><h2>登录控制台</h2><p>请输入分配给你的总控账号密码。参赛车手使用的是另一组房间密码。</p></div>
+      <form id="loginForm" class="auth-form compact-form">
+        <label>总控密码<input id="adminPassword" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="primary">登录总控</button>
+        <p id="loginError" class="form-error" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <div id="dashboard" class="dashboard hidden">
+      <nav class="control-dock" aria-label="总控区域导航">
+        <div class="dock-links">
+          <a href="#eventProjects" data-permission="manage">赛事项目</a><a href="#raceControl" data-permission="manage">比赛控制</a><a href="#liveTiming">实时排名</a><a href="#stewards">处罚调查</a><a href="#resultHistoryPanel">阶段赛果</a><a href="#roomConfiguration" data-permission="manage">高级设置</a><a href="#publicTimingAccess" data-permission="manage">公开计时</a><a href="#controlAccess" data-permission="superAdmin">角色权限</a><a href="#raceEvents">赛事记录</a>
+        </div>
+        <div class="dock-account"><span id="controlPrincipalName">总控账号</span><small id="controlPrincipalRole">—</small></div><button id="logoutButton" class="quiet dock-logout">退出总控</button>
+      </nav>
+
+      <section id="raceBanner" class="race-banner hidden" aria-live="polite"><span id="bannerKind" class="banner-kind">INFO</span><strong id="bannerTitle"></strong><span id="bannerDetail"></span></section>
+
+      <section class="summary-grid" aria-label="赛事概览">
+        <article class="panel summary-card phase-card"><p class="label">赛事阶段</p><strong id="phaseValue">—</strong><span id="sessionValue">—</span></article>
+        <article id="flagCard" class="panel summary-card flag-card green"><p class="label">赛道旗语</p><strong id="flagValue">GREEN</strong><span id="flagMessage">赛道正常</span></article>
+        <article class="panel summary-card"><p class="label">在线车手</p><strong><span id="onlineValue">0</span><small> / 12</small></strong><span id="readyValue">0 人已准备</span></article>
+        <article class="panel summary-card fastest-card"><p class="label">本场最快圈</p><strong id="fastestValue">—</strong><span id="fastestDriver">尚无有效圈</span></article>
+      </section>
+
+      <section id="eventProjects" class="panel event-project-panel" data-permission="manage">
+        <div class="section-heading"><div><p class="eyebrow">EVENT PROJECTS</p><h2>赛事项目</h2></div><span id="eventProjectCount" class="section-note">尚未创建赛事项目</span></div>
+        <p class="muted compact">一个项目对应一场赛事，包含规则、赛程、素材与本场记录。完成后复制用于下一场，或通过 .lfzevent 导出交接。</p>
+        <div class="event-project-workspace">
+          <form id="eventProjectForm" class="event-project-form">
+            <div class="event-project-fields">
+              <label>项目名称<input id="eventProjectName" maxlength="96" placeholder="例如：秋季周末杯" required></label>
+              <label>短名称<input id="eventProjectShortName" maxlength="32" placeholder="例如：AWC"></label>
+              <label>主办方<input id="eventProjectOrganizer" maxlength="96" placeholder="例如：LazyForza Club"></label>
+              <label>计划开始时间<input id="eventProjectStart" type="datetime-local"></label>
+              <label class="event-project-description">赛事说明<textarea id="eventProjectDescription" maxlength="1000" rows="2" placeholder="选填；用于项目归档和交接"></textarea></label>
+            </div>
+            <div class="event-project-form-actions"><button id="saveEventProject" type="submit" class="primary">从当前房间创建项目</button><button id="cancelEventProjectEdit" type="button" class="quiet hidden">取消编辑</button><span id="eventProjectEditHint" class="muted compact">新项目保存当前规则、赛程和素材；启用后单独记录本场赛果。</span></div>
+          </form>
+          <div class="event-project-import">
+            <div><strong>导入赛事项目包</strong><p class="muted compact">导入项目保持原有标识；若本机已有同一项目，则自动创建新副本。导入不会直接改变当前房间。</p></div>
+            <div class="event-project-import-actions"><input id="eventProjectFile" type="file" accept=".lfzevent,application/zip"><button id="importEventProject" type="button">导入 .lfzevent</button></div>
+          </div>
+        </div>
+        <p id="eventProjectStatus" class="event-project-status" aria-live="polite"></p>
+        <div id="eventProjectList" class="event-project-list"><div class="event-project-empty">尚未创建赛事项目</div></div>
+      </section>
+
+      <section id="raceControl" class="command-grid" data-permission="manage">
+        <article class="panel controls session-flow primary-command-panel">
+          <div class="section-heading"><div><p class="eyebrow">SESSION CONTROL</p><h2>比赛流程</h2></div><span class="section-note">按实际比赛顺序排列</span></div>
+          <div class="button-grid session-buttons">
+            <button data-session="lobby">返回大厅</button><button data-session="practice" class="accent">开始练习赛</button><button data-session="qualifying" class="accent">开始排位</button><button data-session="grid">冻结排位</button><button data-session="outLap">下发出场圈</button><button data-session="formationLap">下发暖胎圈</button><button data-session="countdown" class="primary start-race">启动发车程序</button>
+          </div>
+          <details class="session-options">
+            <summary><span>阶段时长与发车参数</span><small>练习赛、排位赛节数及倒计时</small></summary>
+            <div class="session-options-body">
+              <div class="form-grid three slim">
+                <label>练习赛节数<select id="practiceSessionCount"><option value="1" selected>1 节练习赛</option><option value="2">2 节练习赛</option><option value="3">3 节练习赛</option></select></label>
+                <label>排位赛节数<select id="qualifyingSessionCount"><option value="1" selected>1 节（原有模式）</option><option value="2">2 节淘汰赛</option><option value="3">3 节淘汰赛</option></select></label>
+                <label>首盏红灯前倒计时（秒）<input id="countdownSeconds" type="number" min="0" max="120" value="10"></label>
+              </div>
+              <div class="qualifying-settings">
+                <div class="qualifying-session-grid">
+                  <label>FP1 时长（分钟）<input id="practiceFP1Minutes" type="number" min="1" max="180" value="60"></label>
+                  <label id="practiceFP2MinutesField">FP2 时长（分钟）<input id="practiceFP2Minutes" type="number" min="1" max="180" value="60"></label>
+                  <label id="practiceFP3MinutesField">FP3 时长（分钟）<input id="practiceFP3Minutes" type="number" min="1" max="180" value="60"></label>
+                </div>
+                <p class="qualifying-rule-hint">默认每节 60 分钟。多节练习赛分别统计，不淘汰车手。</p>
+              </div>
+              <div id="singleQualifyingSettings" class="qualifying-settings"><label>单节排位时长（分钟）<input id="qualifyingMinutes" type="number" min="1" max="180" value="10"></label></div>
+              <div id="multiQualifyingSettings" class="qualifying-settings hidden">
+                <div class="qualifying-session-grid">
+                  <label>Q1 时长（分钟）<input id="qualifyingQ1Minutes" type="number" min="1" max="180" value="18"></label>
+                  <label>Q2 时长（分钟）<input id="qualifyingQ2Minutes" type="number" min="1" max="180" value="15"></label>
+                  <label id="qualifyingQ3MinutesField">Q3 时长（分钟）<input id="qualifyingQ3Minutes" type="number" min="1" max="180" value="12"></label>
+                  <label>Q1 淘汰人数<input id="qualifyingQ1Eliminations" type="number" min="0" max="11" placeholder="自动"></label>
+                  <label id="qualifyingQ2EliminationsField">Q2 淘汰人数<input id="qualifyingQ2Eliminations" type="number" min="0" max="11" placeholder="自动"></label>
+                </div>
+                <p id="qualifyingRuleHint" class="qualifying-rule-hint">留空时按开赛人数自动分配淘汰名额。</p>
+              </div>
+              <div class="rules-note"><p>计时归零前已开始的最后一圈仍可完成；每节结束后保留排名，下一阶段由总控手动开启。</p><p>五盏红灯按秒依次点亮，全部亮起后随机等待 1–4 秒熄灭并开始正赛。方格旗由服务端按比赛进度自动处理。</p></div>
+            </div>
+          </details>
+        </article>
+
+        <article class="panel flag-control controls">
+          <div class="section-heading"><div><p class="eyebrow">TRACK STATUS</p><h2>旗语控制</h2></div><span class="section-note">红旗始终作用于全场</span></div>
+          <div class="flag-form">
+            <label>作用范围<select id="flagSector"><option value="all">全场</option></select></label>
+            <label>旗语说明<input id="flagReason" maxlength="160" placeholder="例如：S2 有车辆停在赛道上"></label>
+            <div class="flag-buttons"><button data-flag="green" class="flag-green">恢复绿旗</button><button data-flag="yellow" class="flag-yellow">发布黄旗</button><button data-flag="red" class="flag-red">发布红旗</button></div>
+          </div>
+          <div id="yellowZones" class="zone-list"><span class="zone-empty">当前没有黄旗分区</span></div>
+          <p class="muted compact">分段黄旗与全场人工旗语分别保存；自动黄旗会在故障解除后恢复。</p>
+        </article>
+      </section>
+
+      <section id="liveTiming" class="panel timing-panel priority-panel">
+        <div class="section-heading"><div><p class="eyebrow">LIVE TIMING</p><h2>实时排名与车手管理</h2></div><div id="resultExportPanel" class="result-export hidden"><button id="exportResultsPng" type="button">导出完整成绩 PNG</button><button id="exportResultsCsv" type="button">导出表格 CSV</button></div></div>
+        <div class="table-wrap"><table><thead><tr><th>排名</th><th>车手</th><th>状态</th><th>圈数</th><th>当前圈</th><th>最快圈</th><th>正赛总时间</th><th>Delta</th><th>管理</th></tr></thead><tbody id="timingRows"></tbody></table></div>
+        <div class="observer-strip"><div class="observer-heading"><div><p class="eyebrow">BROADCAST</p><strong>已连接 OB</strong></div><span id="observerCount">0 人</span></div><div id="observerList" class="observer-list"><span class="observer-empty">当前没有 OB 连接</span></div></div>
+        <p id="actionError" class="form-error" aria-live="polite"></p>
+      </section>
+
+      <section id="stewards" class="panel penalty-control-panel">
+        <div class="section-heading"><div><p class="eyebrow">STEWARDS</p><h2>处罚与调查</h2></div><span class="section-note">待审、自动与人工处罚集中处理</span></div>
+        <div class="penalty-control-grid">
+          <section class="penalty-column"><div class="penalty-column-heading"><strong>待处理调查</strong><span>检测仅提供证据，由总控决定</span></div><div id="investigationRows" class="penalty-list"><div class="penalty-empty">当前没有待处理调查</div></div></section>
+          <section class="penalty-column"><div class="penalty-column-heading"><strong>已下发判罚</strong><span>可修改、取消及处理赛后加时</span></div><div id="penaltyRows" class="penalty-list"><div class="penalty-empty">尚未下发判罚</div></div></section>
+        </div>
+      </section>
+
+      <section class="panel result-history-panel" id="resultHistoryPanel">
+        <div class="section-heading"><div><p class="eyebrow">RESULT ARCHIVE</p><h2>阶段赛果</h2></div><span id="resultHistoryCount" class="section-note">尚无已结束阶段</span></div>
+        <p class="muted compact">练习赛、每节排位赛与正赛结束后自动固化；返回大厅后仍可查看和导出。</p>
+        <div id="resultHistoryRows" class="result-history-list"><div class="result-history-empty">尚无可回看的阶段赛果</div></div>
+      </section>
+
+      <details id="roomConfiguration" class="panel workspace-panel" data-permission="manage">
+        <summary class="workspace-summary"><span class="workspace-icon">SET</span><span><small>ROOM CONFIGURATION</small><strong>房间、赛道与自动化设置</strong></span><span id="settingsSaved" class="save-state">按需展开</span></summary>
+        <article class="controls room-settings workspace-body">
+          <section class="rule-template-panel">
+            <div class="rule-template-heading">
+              <div><p class="eyebrow">RULE TEMPLATES</p><h2>赛事规则模板</h2><p class="muted compact">复用圈数、赛制、发车、进站、车队规模与自动判定规则；赛事名称、赛道和车队资料不会写入模板。</p></div>
+              <div class="rule-template-create"><label>模板名称<input id="ruleTemplateName" maxlength="64" placeholder="例如：周末冲刺赛"></label><button id="saveRuleTemplate" type="button" class="primary">保存为新模板</button></div>
+            </div>
+            <p id="ruleTemplateStatus" class="rule-template-status" aria-live="polite"></p>
+            <div id="ruleTemplateList" class="rule-template-list"><div class="rule-template-empty">尚未保存规则模板</div></div>
+          </section>
+          <div class="section-heading"><div><p class="eyebrow">GENERAL</p><h2>基础房间设置</h2></div><span class="section-note">发车后需返回大厅才能修改比赛规则</span></div>
+          <div class="field-grid room-fields room-fields-primary">
+            <label>赛事名称<input id="sessionName" maxlength="64"></label><label>正赛圈数<input id="raceLaps" type="number" min="1" max="999"></label><label>完赛最少进站次数<input id="minimumRequiredPitStops" type="number" min="0" max="20" value="1"></label><label>赛道分段数<input id="sectorCount" type="number" min="1" max="20"></label><label class="toggle"><input id="automaticYellow" type="checkbox"><span>启用自动黄旗</span></label><label class="toggle"><input id="allowTeams" type="checkbox"><span>允许车队</span></label>
+          </div>
+          <section id="teamSettings" class="team-settings hidden">
+            <div class="team-settings-head"><div><strong>车队设置</strong><p class="muted compact">车手只能选择这里配置的车队；总人数仍受 12 人上限限制。</p></div><div class="team-count-fields"><label>车队数<input id="teamCount" type="number" min="1" max="12" value="2"></label><label>每队人数<input id="driversPerTeam" type="number" min="1" max="12" value="6"></label></div></div>
+            <div id="teamRows" class="team-rows"></div>
+          </section>
+          <details class="room-submenu">
+            <summary><span>赛道与客户端同步</span><small>标识、摘要与赛道文件托管</small></summary>
+            <div class="room-submenu-body">
+              <div class="field-grid room-fields"><label>赛道名称<input id="trackName" maxlength="128" placeholder="例如：英国塔俱乐部环道"></label><label>赛道标识<input id="trackId" maxlength="128" placeholder="导出时显示的 UUID"></label><label>赛道特征 SHA-256<input id="trackPackageHash" maxlength="128" placeholder="上传赛道文件后自动识别"></label></div>
+              <section class="track-package-panel"><div><strong>托管赛道文件</strong><p class="muted compact">上传 .lfzestate 后自动校验并设为当前房间赛道。自托管与 Cloudflare 均限制为 1.5 MiB。</p></div><div class="track-package-actions"><input id="trackPackageFile" type="file" accept=".lfzestate,application/zip"><button id="uploadTrackPackage" type="button">上传并托管</button><button id="deleteTrackPackage" type="button" class="quiet">移除托管文件</button></div><p id="trackPackageStatus" class="track-package-status">尚未读取托管状态</p></section>
+            </div>
+          </details>
+          <details class="room-submenu">
+            <summary><span>排行榜赛事 Logo</span><small>客户端顶栏品牌图</small></summary>
+            <div class="room-submenu-body"><section class="organizer-logo-panel"><div><strong>排行榜赛事 Logo</strong><p class="muted compact">建议上传四周留有少量空白的透明 PNG；未上传时使用 LazyForza 的 LF Logo。</p></div><div class="organizer-logo-actions"><span class="organizer-logo-preview"><img id="organizerLogoPreview" alt="赛事 Logo 预览"></span><input id="organizerLogoFile" type="file" accept="image/png,image/jpeg"><button id="uploadOrganizerLogo" type="button">上传 Logo</button><button id="deleteOrganizerLogo" type="button" class="quiet">恢复默认</button></div><p id="organizerLogoStatus" class="track-package-status">尚未读取 Logo 状态</p></section></div>
+          </details>
+          <details class="room-submenu">
+            <summary><span>判定与自动化</span><small>黄旗、边界、碰撞调查与恢复阈值</small></summary>
+            <div class="room-submenu-body">
+              <label class="toggle"><input id="automaticCollisionInvestigations" type="checkbox"><span>启用疑似碰撞自动调查（练习、排位与正赛）</span></label>
+              <label class="toggle"><input id="disconnectedLapRecovery" type="checkbox"><span>允许断线后补交本地计圈（30 秒）</span></label>
+              <div class="field-grid hazard-fields"><label>赛道边界处理<select id="trackLimitMode"><option value="warningsOnly">仅记录警告，交总控核查</option><option value="automatic">自动警告与罚时</option><option value="disabled">关闭判定</option></select></label><label>极低速阈值 km/h<input id="slowSpeedKph" type="number" min="3" max="50" step="1"></label><label>低速持续秒数<input id="slowDurationSeconds" type="number" min="1" max="15" step="0.5"></label><label>严重偏离/严重切弯距离 m<input id="severeLateralOffsetMeters" type="number" min="5" max="200" step="1"></label><label>恢复确认秒数<input id="recoveryDurationSeconds" type="number" min="1" max="15" step="0.5"></label></div>
+              <p class="muted compact">练习、排位与正赛均会使用双方轨迹、相对运动、冲击证据与官方可破坏物字段生成待审调查，不自动认定责任。</p>
+              <p class="muted compact">切弯判定优先比较参考路线弧长与车辆实走轨迹，并检查关键弯是否被绕过；横向偏移只作辅助。“仅记录警告”留给总控核查，“自动警告与罚时”才会自动下发处罚。</p>
+            </div>
+          </details>
+          <div class="settings-footer"><button id="saveSettings" class="primary">保存房间设置</button><p class="muted compact">赛事名称与规则不会被实时刷新覆盖。</p></div>
+        </article>
+      </details>
+
+      <section id="controlAccess" class="panel control-access-panel" data-permission="superAdmin">
+        <div class="section-heading"><div><p class="eyebrow">CONTROL ACCESS</p><h2>总控角色权限</h2></div><span id="controlAccountCount" class="section-note">正在读取账号</span></div>
+        <p class="muted compact">超管拥有全部权限；管理员不能管理总控账号；裁判只能查看赛事并处理判罚和调查。每位用户应使用独立密码。</p>
+        <form id="controlAccountForm" class="control-account-create">
+          <label>账号名称<input id="controlAccountName" maxlength="48" placeholder="例如：赛事主管" required></label>
+          <label>角色<select id="controlAccountRole"><option value="administrator">管理员</option><option value="steward">裁判</option><option value="superAdmin">超管</option></select></label>
+          <label>独立密码<input id="controlAccountPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+          <button id="createControlAccount" type="submit" class="primary">添加账号</button>
+        </form>
+        <p id="controlAccountStatus" class="control-account-status" aria-live="polite"></p>
+        <div id="controlAccountList" class="control-account-list"></div>
+      </section>
+
+      <section id="publicTimingAccess" class="panel public-timing-panel" data-permission="manage">
+        <div class="section-heading"><div><p class="eyebrow">PUBLIC LIVE TIMING</p><h2>公开实时计时</h2></div><span id="publicTimingState" class="section-note">正在读取状态</span></div>
+        <p class="muted compact">为观众、手机、Pad 和直播浏览器源生成独立只读链接。链接不能操作赛事，也不包含任何总控密码或登录会话。</p>
+        <div class="public-timing-actions">
+          <button id="rotatePublicTiming" type="button" class="primary">启用并生成链接</button>
+          <button id="disablePublicTiming" type="button" class="danger hidden">停用公开计时</button>
+        </div>
+        <div id="publicTimingLinks" class="public-timing-links hidden">
+          <label>普通浏览链接<span><input id="publicTimingViewerUrl" readonly><button id="copyPublicTimingViewer" type="button">复制</button></span></label>
+          <label>直播透明背景链接<span><input id="publicTimingBroadcastUrl" readonly><button id="copyPublicTimingBroadcast" type="button">复制</button></span></label>
+          <p class="muted compact">只读令牌只在本次生成后显示。请立即保存链接；丢失时轮换令牌，旧链接会立即失效。</p>
+        </div>
+        <p id="publicTimingStatus" class="control-account-status" aria-live="polite"></p>
+      </section>
+
+      <section id="raceEvents" class="panel event-panel">
+        <div class="section-heading"><div><p class="eyebrow">RACE LOG</p><h2>赛事事件</h2></div><span class="section-note">最新事件在最上方</span></div>
+        <div class="event-list" id="eventRows"><div class="event-empty">尚无赛事事件</div></div>
+      </section>
+    </div>
+  </main>
+  <div id="preRaceCheckModal" class="pre-race-check-modal hidden" role="dialog" aria-modal="true" aria-labelledby="preRaceCheckTitle">
+    <section class="pre-race-check-dialog panel">
+      <header class="pre-race-check-header">
+        <div><p class="eyebrow">PRE-RACE CHECK</p><h2 id="preRaceCheckTitle">赛事开始前检查</h2><p>检查结果仅作警告，不会禁止总控发车。</p></div>
+        <button id="preRaceCheckClose" type="button" class="quiet">关闭</button>
+      </header>
+      <div class="pre-race-check-summary"><strong id="preRaceCheckCount">0 项警告</strong><span>请确认车手与赛事状态；必要时仍可强制启动发车程序。</span></div>
+      <ul id="preRaceCheckWarnings" class="pre-race-check-warnings"></ul>
+      <footer class="pre-race-check-actions">
+        <button id="preRaceCheckCancel" type="button">取消发车</button>
+        <button id="preRaceCheckForceStart" type="button" class="primary">忽略警告并启动</button>
+      </footer>
+    </section>
+  </div>
+  <div id="collisionReplayModal" class="collision-replay-modal hidden" role="dialog" aria-modal="true" aria-labelledby="collisionReplayTitle">
+    <section class="collision-replay-dialog panel">
+      <header class="collision-replay-header">
+        <div><p class="eyebrow">TELEMETRY EVIDENCE</p><h2 id="collisionReplayTitle">事故证据回放</h2><p id="collisionReplaySubtitle">双方世界坐标的 X/Z 平面动态预览</p></div>
+        <button id="collisionReplayClose" type="button" class="quiet">关闭</button>
+      </header>
+      <p id="collisionReplayStatus" class="collision-replay-status">正在读取回放证据…</p>
+      <div class="collision-replay-stage">
+        <svg id="collisionReplaySvg" viewBox="0 0 760 400" role="img" aria-label="碰撞双方遥测轨迹动态回放"></svg>
+      </div>
+      <div class="collision-replay-controls">
+        <button id="collisionReplayPlay" type="button" class="primary">播放</button>
+        <input id="collisionReplayTimeline" type="range" min="0" max="1" step="0.05" value="0" aria-label="事故证据时间轴">
+        <output id="collisionReplayTime">−3.0 s</output>
+      </div>
+      <div id="collisionReplayLegend" class="collision-replay-legend"></div>
+      <div id="collisionReplayStats" class="collision-replay-stats"></div>
+      <p class="collision-replay-disclaimer">这是各客户端上报遥测形成的轨迹证据，不是游戏画面，也不自动认定事故责任。</p>
+    </section>
+  </div>
+  <script src="/i18n.js?v=20260830-1" defer></script>
+  <script src="/app.js?v=20260912-3" defer></script>
+  <script src="/workspace.js?v=20260912-3" defer></script>
+</body>
+</html>

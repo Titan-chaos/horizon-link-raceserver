@@ -1,0 +1,22 @@
+.event-panel { padding: 20px; scroll-margin-top: 80px; }
+.event-list { max-height: 420px; display: grid; margin-top: 13px; overflow: auto; border: 1px solid #263143; border-radius: 6px; background: #080d13; }
+.event-row { min-height: 45px; display: grid; grid-template-columns: 78px 110px minmax(0,1fr); gap: 13px; align-items: center; padding: 7px 12px; border-top: 1px solid #202a37; }
+.event-row:first-child { border-top: 0; }
+.event-row time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 10px; }
+.event-row strong { color: var(--cyan); font-size: 10px; }
+.event-row span { color: #d9e0e7; line-height: 1.4; font-size: 11px; }
+.event-row.event-trackLimitWarning strong,
+.event-row.event-automaticYellow strong { color: var(--yellow); }
+.event-row.event-automaticPenalty strong,
+.event-row.event-manualPenalty strong,
+.event-row.event-falseStart strong,
+.event-row.event-penaltyServiceFailed strong { color: var(--red); }
+.event-row.event-lapCompleted strong { color: var(--purple); }
+.event-row.event-pitEntered strong,
+.event-row.event-pitExited strong,
+.event-row.event-penaltyServiceCompleted strong { color: var(--green); }
+.event-empty { padding: 26px; color: var(--muted); text-align: center; font-size: 11px; }
+@media (max-width: 680px) {
+  .event-panel { padding: 15px; }
+  .event-row { grid-template-columns: 66px 82px minmax(0,1fr); gap: 7px; padding: 7px 9px; }
+}
